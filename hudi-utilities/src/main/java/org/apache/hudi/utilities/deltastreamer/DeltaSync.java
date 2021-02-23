@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.DataSourceUtils;
+import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
@@ -235,12 +236,15 @@ public class DeltaSync implements Serializable {
       }
     } else {
       this.commitTimelineOpt = Option.empty();
+      String partitionColumns =
+          props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), null);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setArchiveLogFolder("archived")
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
+          .setPartitionColumns(partitionColumns)
           .initTable(new Configuration(jssc.hadoopConfiguration()),
             cfg.targetBasePath);
     }
@@ -326,12 +330,15 @@ public class DeltaSync implements Serializable {
         }
       }
     } else {
+      String partitionColumns =
+          props.getString(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY(), null);
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(cfg.tableType)
           .setTableName(cfg.targetTableName)
           .setArchiveLogFolder("archived")
           .setPayloadClassName(cfg.payloadClassName)
           .setBaseFileFormat(cfg.baseFileFormat)
+          .setPartitionColumns(partitionColumns)
           .initTable(new Configuration(jssc.hadoopConfiguration()), cfg.targetBasePath);
     }
 

@@ -112,12 +112,15 @@ private[hudi] object HoodieSparkSqlWriter {
         val archiveLogFolder = parameters.getOrElse(
           HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
 
+        val partitionColumns = parameters.getOrElse(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, null)
+
         val tableMetaClient = HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(tableType)
           .setTableName(tblName)
           .setArchiveLogFolder(archiveLogFolder)
           .setPayloadClassName(parameters(PAYLOAD_CLASS_OPT_KEY))
           .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
+          .setPartitionColumns(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path.get)
         tableConfig = tableMetaClient.getTableConfig
       }
@@ -283,6 +286,7 @@ private[hudi] object HoodieSparkSqlWriter {
     if (!tableExists) {
       val archiveLogFolder = parameters.getOrElse(
         HoodieTableConfig.HOODIE_ARCHIVELOG_FOLDER_PROP_NAME, "archived")
+      val partitionColumns = parameters.getOrElse(DataSourceWriteOptions.PARTITIONPATH_FIELD_OPT_KEY, null)
       HoodieTableMetaClient.withPropertyBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
@@ -291,6 +295,7 @@ private[hudi] object HoodieSparkSqlWriter {
           .setPreCombineField(parameters.getOrDefault(PRECOMBINE_FIELD_OPT_KEY, null))
           .setBootstrapIndexClass(bootstrapIndexClass)
           .setBootstrapBasePath(bootstrapBasePath)
+          .setPartitionColumns(partitionColumns)
           .initTable(sparkContext.hadoopConfiguration, path)
     }
 
