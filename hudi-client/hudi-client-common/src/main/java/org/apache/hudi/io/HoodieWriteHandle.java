@@ -28,7 +28,6 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
@@ -55,8 +54,41 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
 
-  protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  /**
+   * A special record returned by {@link HoodieRecordPayload}, which means
+   * {@link HoodieWriteHandle} should just skip this record.
+   * The HoodieRecordPayload#combineAndGetUpdateValue and HoodieRecordPayload#getInsertValue
+   * have 3 kind of return:
+   * 1、Option.empty
+   * This means we should delete this record.
+   * 2、IGNORE_RECORD
+   * This means we should not process this record,just skip.
+   * 3、Other non-empty record
+   * This means we should process this record.
+   *
+   * We can see the usage of IGNORE_RECORD in
+   * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
+   */
+  public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
+
+  /**
+   * The input schema of the incoming dataframe.
+   */
+  protected final Schema inputSchema;
+  protected final Schema inputSchemaWithMetaFields;
+
+  /**
+   * The write schema. In most case the write schema is the same to the
+   * input schema. But in some case if user specify the HoodieWriteConfig#WRITE_SCHEMA,
+   * we use the WRITE_SCHEMA as the write schema.
+   *
+   * This is useful for the case of custom HoodieRecordPayload which do some conversion
+   * to the incoming record in it. e.g. the ExpressionPayload do the sql expression conversion
+   * to the input.
+   */
+  protected final Schema writeSchema;
+  protected final Schema writeSchemaWithMetaFields;
+
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
   protected final String partitionPath;
@@ -67,17 +99,19 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   public HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath,
                            String fileId, HoodieTable<T, I, K, O> hoodieTable, TaskContextSupplier taskContextSupplier) {
     this(config, instantTime, partitionPath, fileId, hoodieTable,
-        getWriterSchemaIncludingAndExcludingMetadataPair(config), taskContextSupplier);
+        Option.empty(), taskContextSupplier);
   }
 
   protected HoodieWriteHandle(HoodieWriteConfig config, String instantTime, String partitionPath, String fileId,
-                              HoodieTable<T, I, K, O> hoodieTable, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                              HoodieTable<T, I, K, O> hoodieTable, Option<Schema> specifiedSchema,
                               TaskContextSupplier taskContextSupplier) {
     super(config, instantTime, hoodieTable);
     this.partitionPath = partitionPath;
     this.fileId = fileId;
-    this.writerSchema = writerSchemaIncludingAndExcludingMetadataPair.getKey();
-    this.writerSchemaWithMetafields = writerSchemaIncludingAndExcludingMetadataPair.getValue();
+    this.inputSchema = specifiedSchema.orElseGet(() -> getInputSchema(config));
+    this.inputSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(inputSchema);
+    this.writeSchema = specifiedSchema.orElseGet(() -> getWriteSchema(config));
+    this.writeSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(writeSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -86,16 +120,21 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   /**
-   * Returns writer schema pairs containing
-   *   (a) Writer Schema from client
-   *   (b) (a) with hoodie metadata fields.
-   * @param config Write Config
+   * Get the input schema.
+   * @param config
    * @return
    */
-  protected static Pair<Schema, Schema> getWriterSchemaIncludingAndExcludingMetadataPair(HoodieWriteConfig config) {
-    Schema originalSchema = new Schema.Parser().parse(config.getSchema());
-    Schema hoodieSchema = HoodieAvroUtils.addMetadataFields(originalSchema);
-    return Pair.of(originalSchema, hoodieSchema);
+  private static Schema getInputSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getSchema());
+  }
+
+  /**
+   * Get the write schema.
+   * @param config
+   * @return
+   */
+  private static Schema getWriteSchema(HoodieWriteConfig config) {
+    return new Schema.Parser().parse(config.getWriteSchema());
   }
 
   /**
@@ -130,7 +169,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+    return writeSchemaWithMetaFields;
   }
 
   /**
@@ -168,7 +207,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    return HoodieAvroUtils.rewriteRecord(record, writeSchemaWithMetaFields);
   }
 
   public abstract List<WriteStatus> close();
@@ -203,5 +242,33 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  private static class IgnoreRecord implements GenericRecord {
+
+    @Override
+    public void put(int i, Object v) {
+
+    }
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {
+
+    }
+
+    @Override
+    public Object get(String key) {
+      return null;
+    }
   }
 }

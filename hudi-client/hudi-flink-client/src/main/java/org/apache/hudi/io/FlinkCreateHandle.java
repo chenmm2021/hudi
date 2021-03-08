@@ -22,7 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
@@ -57,14 +57,14 @@ public class FlinkCreateHandle<T extends HoodieRecordPayload, I, K, O>
 
   public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                            String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, getWriterSchemaIncludingAndExcludingMetadataPair(config),
+    this(config, instantTime, hoodieTable, partitionPath, fileId, Option.empty(),
         taskContextSupplier);
   }
 
   public FlinkCreateHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                           String partitionPath, String fileId, Pair<Schema, Schema> writerSchemaIncludingAndExcludingMetadataPair,
+                           String partitionPath, String fileId, Option<Schema> schemaOption,
                            TaskContextSupplier taskContextSupplier) {
-    super(config, instantTime, hoodieTable, partitionPath, fileId, writerSchemaIncludingAndExcludingMetadataPair,
+    super(config, instantTime, hoodieTable, partitionPath, fileId, schemaOption,
         taskContextSupplier);
   }
 

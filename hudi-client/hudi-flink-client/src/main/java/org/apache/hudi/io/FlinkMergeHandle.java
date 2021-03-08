@@ -158,7 +158,8 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     newFilePath = makeNewFilePathWithRollover();
 
     try {
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config,
+        writeSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException e) {
       throw new HoodieIOException("Error when creating file writer for path " + newFilePath, e);
     }

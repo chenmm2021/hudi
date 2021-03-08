@@ -29,6 +29,7 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <scala.version>${scala11.version}</scala.version>
   </properties>
 
   <build>
@@ -143,6 +144,24 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.antlr</groupId>
+        <artifactId>antlr4-maven-plugin</artifactId>
+        <version>4.7</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>antlr4</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <visitor>true</visitor>
+          <listener>true</listener>
+          <sourceDirectory>../hudi-spark2/src/main/antlr4/</sourceDirectory>
+          <libDirectory>../hudi-spark2/src/main/antlr4/imports</libDirectory>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -172,8 +191,15 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
+      <artifactId>spark-core_${scala.binary.version}</artifactId>
+      <version>${spark2.version}</version>
+      <optional>true</optional>
     </dependency>
 
     <dependency>
@@ -223,7 +249,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-common</artifactId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
       <classifier>tests</classifier>
       <type>test-jar</type>
