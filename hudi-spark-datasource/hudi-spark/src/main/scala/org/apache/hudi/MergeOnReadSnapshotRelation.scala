@@ -135,23 +135,23 @@ class MergeOnReadSnapshotRelation(val sqlContext: SQLContext,
   def buildFileIndex(): List[HoodieMergeOnReadFileSplit] = {
     val inMemoryFileIndex = HoodieSparkUtils.createInMemoryFileIndex(sqlContext.sparkSession, globPaths)
     val fileStatuses = inMemoryFileIndex.allFiles()
-    if (fileStatuses.isEmpty) {
-      throw new HoodieException("No files found for reading in user provided path.")
+    if (fileStatuses.isEmpty) { // Return empty list if the table is first write/read.
+      List.empty
+    } else {
+      val fsView = new HoodieTableFileSystemView(metaClient,
+        metaClient.getActiveTimeline.getCommitsTimeline
+          .filterCompletedInstants, fileStatuses.toArray)
+      val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
+      val latestCommit = fsView.getLastInstant.get().getTimestamp
+      val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
+      val fileSplits = fileGroup.map(kv => {
+        val baseFile = kv._1
+        val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
+        val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
+        HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
+          metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
+      }).toList
+      fileSplits
     }
-
-    val fsView = new HoodieTableFileSystemView(metaClient,
-      metaClient.getActiveTimeline.getCommitsTimeline
-        .filterCompletedInstants, fileStatuses.toArray)
-    val latestFiles: List[HoodieBaseFile] = fsView.getLatestBaseFiles.iterator().asScala.toList
-    val latestCommit = fsView.getLastInstant.get().getTimestamp
-    val fileGroup = HoodieRealtimeInputFormatUtils.groupLogsByBaseFile(conf, latestFiles.asJava).asScala
-    val fileSplits = fileGroup.map(kv => {
-      val baseFile = kv._1
-      val logPaths = if (kv._2.isEmpty) Option.empty else Option(kv._2.asScala.toList)
-      val partitionedFile = PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen)
-      HoodieMergeOnReadFileSplit(Option(partitionedFile), logPaths, latestCommit,
-        metaClient.getBasePath, maxCompactionMemoryInBytes, mergeType)
-    }).toList
-    fileSplits
   }
 }

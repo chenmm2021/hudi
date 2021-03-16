@@ -189,7 +189,7 @@ object InsertIntoHoodieTableCommand {
     }
 
     val dropDuplicate = sparkSession.conf
-      .getOption(HoodieOptionConfig.withPrefix(INSERT_DROP_DUPS_OPT_KEY))
+      .getOption(INSERT_DROP_DUPS_OPT_KEY)
       .getOrElse(DEFAULT_INSERT_DROP_DUPS_OPT_VAL)
       .toBoolean
 

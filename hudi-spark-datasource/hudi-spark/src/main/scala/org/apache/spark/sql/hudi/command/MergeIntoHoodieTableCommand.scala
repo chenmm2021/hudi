@@ -21,6 +21,7 @@ import java.util.Base64
 
 import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.common.model.HoodiePayloadProps
 import org.apache.hudi.common.model.HoodiePayloadProps._
 import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -129,13 +130,12 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // Check for the insert actions
     checkInsertAssignments(insertActions)
 
-    // Append the write schema to the parameters. In the case of merge into, the schema of sourceDf
+    // Append the table schema to the parameters. In the case of merge into, the schema of sourceDf
     // may be different from the target table, because the are transform logical in the update or
-    // insert actions. So we must specify the actual schema to the WRITE_SCHEMA. For more
-    // information about this, see the comment on HoodieWriteConfig#getWriteSchema.
+    // insert actions.
     var writeParams = parameters +
       (OPERATION_OPT_KEY -> UPSERT_OPERATION_OPT_VAL) +
-       (HoodieWriteConfig.WRITE_SCHEMA -> getWriteSchema.toString)
+      (HoodiePayloadProps.PAYLOAD_TABLE_SCHEMA -> getTableSchema.toString)
 
     // Map of Condition -> Assignments
     val updateConditionToAssignments =
@@ -179,7 +179,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     var writeParams = parameters +
       (OPERATION_OPT_KEY -> INSERT_OPERATION_OPT_VAL) +
-      (HoodieWriteConfig.WRITE_SCHEMA -> getWriteSchema.toString)
+      (HoodiePayloadProps.PAYLOAD_TABLE_SCHEMA -> getTableSchema.toString)
 
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions, sourceDf))
@@ -200,7 +200,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           s"targetTable field size[${targetTableSchemaWithoutMetaFields.length}]"))
   }
 
-  private def getWriteSchema: Schema = {
+  private def getTableSchema: Schema = {
     val (structName, nameSpace) = AvroConversionUtils
       .getAvroRecordNameAndNamespace(targetTableIdentify.identifier)
     AvroConversionUtils.convertStructTypeToAvroSchema(

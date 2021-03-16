@@ -175,8 +175,6 @@ object HoodieSqlUtils {
                    (baseConfig: Map[String, String]): Map[String, String] = {
     baseConfig ++ // Table options has the highest priority
       (spark.sessionState.conf.getAllConfs ++ HoodieOptionConfig.mappingSqlOptionToHoodieParam(options))
-        .filterKeys(_.startsWith(HoodieOptionConfig.CONFIG_PREFIX)).map {
-        case (key, value) => (HoodieOptionConfig.tripPrefix(key), value)
-      }
+        .filterKeys(_.startsWith("hoodie."))
   }
 }

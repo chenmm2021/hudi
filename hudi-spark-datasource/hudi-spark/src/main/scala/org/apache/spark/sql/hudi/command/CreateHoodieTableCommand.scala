@@ -18,18 +18,17 @@
 package org.apache.spark.sql.hudi.command
 
 import scala.collection.JavaConverters._
-
 import java.util.Properties
 
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.DataSourceWriteOptions.{DEFAULT_PAYLOAD_OPT_VAL, PAYLOAD_CLASS_OPT_KEY}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.avro.SchemaConverters
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
@@ -109,7 +108,7 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
 object CreateHoodieTableCommand extends Logging {
 
   /**
-    * Init the hoodie table if it is not exists.
+    * Init the table if it is not exists.
     * @param sparkSession
     * @param table
     * @return
@@ -126,20 +125,17 @@ object CreateHoodieTableCommand extends Logging {
     // Init the hoodie table
     if (!tableExists) {
       val tableName = table.identifier.table
-      val parameters = HoodieOptionConfig.mappingSqlOptionToHoodieParam(table.storage.properties)
-      val payloadClass = parameters.getOrElse(PAYLOAD_CLASS_OPT_KEY, DEFAULT_PAYLOAD_OPT_VAL)
-      val tableType = parameters.getOrElse(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY,
-        DataSourceWriteOptions.DEFAULT_TABLE_TYPE_OPT_VAL)
-
       logInfo(s"Table $tableName is not exists, start to create the hudi table")
+
+      // Save all the table config to the hoodie.properties.
+      val parameters = HoodieOptionConfig.mappingSqlOptionToTableConfig(table.storage.properties)
       val properties = new Properties()
       properties.putAll(parameters.asJava)
       HoodieTableMetaClient.withPropertyBuilder()
           .fromProperties(properties)
           .setTableName(tableName)
-          .setTableType(tableType)
-          .setPayloadClassName(payloadClass)
-        .initTable(conf, basePath.toString)
+          .setTableSchema(SchemaConverters.toAvroType(table.schema).toString())
+          .initTable(conf, basePath.toString)
     }
   }
 }

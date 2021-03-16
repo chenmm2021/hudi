@@ -48,4 +48,6 @@ public class HoodiePayloadProps {
 
   public static final String PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS =
       "hoodie.payload.insert.condition.assignments";
+
+  public static final String PAYLOAD_TABLE_SCHEMA = "hoodie.payload.table.schema";
 }

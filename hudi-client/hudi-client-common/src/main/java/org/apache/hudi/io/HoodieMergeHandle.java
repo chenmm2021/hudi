@@ -127,11 +127,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   @Override
   public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+    return tableSchemaWithMetaFields;
   }
 
   public Schema getWriterSchema() {
-    return writerSchema;
+    return tableSchema;
   }
 
   /**
@@ -176,7 +176,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, tableSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -310,7 +310,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter.writeAvro(key, oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-                key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
+                key, getOldFilePath(), newFilePath, tableSchemaWithMetaFields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }

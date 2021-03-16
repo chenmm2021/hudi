@@ -27,8 +27,7 @@ import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
-import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
 import org.apache.hudi.io.HoodieMergeHandle
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.catalyst.expressions.Expression
@@ -49,7 +48,10 @@ class ExpressionPayload(record: GenericRecord,
                         orderingVal: Comparable[_])
   extends DefaultHoodieRecordPayload(record, orderingVal) {
 
-  private var  writeSchema: Schema =_
+  /**
+    * The schema of this table.
+    */
+  private var  tableSchema: Schema =_
 
   override def combineAndGetUpdateValue(currentValue: IndexedRecord,
                                         schema: Schema): HOption[IndexedRecord] = {
@@ -83,8 +85,8 @@ class ExpressionPayload(record: GenericRecord,
       // to compute final record to update. We will return the first matched record.
       if (conditionVal) {
         val results = assignmentEvaluator.eval(joinSqlRecord)
-        initWriteSchemaIfNeed(properties)
-        val resultRecord = convertToRecord(results, writeSchema)
+        initTableSchemaIfNeed(properties)
+        val resultRecord = convertToRecord(results, tableSchema)
         // if the PreCombine field value of targetRecord is greate
         // than the new incoming record, just keep the old record value.
         if (noNeedUpdatePersistedRecord(targetRecord, resultRecord, properties)) {
@@ -133,8 +135,8 @@ class ExpressionPayload(record: GenericRecord,
         // result record. We will return the first matched record.
         if (conditionVal) {
           val results = assignmentEvaluator.eval(sqlTypedRecord)
-          initWriteSchemaIfNeed(properties)
-          resultRecordOpt = HOption.of(convertToRecord(results, writeSchema))
+          initTableSchemaIfNeed(properties)
+          resultRecordOpt = HOption.of(convertToRecord(results, tableSchema))
         }
       }
       if (resultRecordOpt != null) {
@@ -157,22 +159,18 @@ class ExpressionPayload(record: GenericRecord,
   }
 
   /**
-    * Init the write schema.
-    * @param properties
+    * Init the table schema.
     */
-  private def initWriteSchemaIfNeed(properties: Properties): Unit = {
-    if (writeSchema == null) {
-      assert(properties.containsKey(HoodieWriteConfig.WRITE_SCHEMA),
-        s"Missing ${HoodieWriteConfig.WRITE_SCHEMA}")
-      writeSchema = new Schema.Parser()
-        .parse(properties.getProperty(HoodieWriteConfig.WRITE_SCHEMA))
+  private def initTableSchemaIfNeed(properties: Properties): Unit = {
+    if (tableSchema == null) {
+      ValidationUtils.checkArgument(properties.containsKey(HoodiePayloadProps.PAYLOAD_TABLE_SCHEMA),
+        s"Missing ${HoodiePayloadProps.PAYLOAD_TABLE_SCHEMA}")
+      tableSchema = new Schema.Parser().parse(properties.getProperty(HoodiePayloadProps.PAYLOAD_TABLE_SCHEMA))
     }
   }
 
   /**
     * Join the source record with the target record.
-    * @param sourceRecord
-    * @param targetRecord
     * @return
     */
   private def joinRecord(sourceRecord: IndexedRecord, targetRecord: IndexedRecord): IndexedRecord = {

@@ -149,7 +149,7 @@ public class FlinkMergeHandle<T extends HoodieRecordPayload, I, K, O>
     newFilePath = new Path(config.getBasePath(), relativePath);
 
     try {
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, tableSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException e) {
       throw new HoodieIOException("Error when creating file writer for path " + newFilePath, e);
     }

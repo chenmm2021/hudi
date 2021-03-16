@@ -31,9 +31,9 @@ class HoodieBaseSqlTest extends FunSuite with BeforeAndAfterAll {
     .appName("hoodie sql test")
     .withExtensions(new HoodieSparkSessionExtension)
     .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-    .config("spark.hoodie.datasource.meta.sync.enable", "false")
-    .config("spark.hoodie.insert.shuffle.parallelism", "4")
-    .config("spark.hoodie.upsert.shuffle.parallelism", "4")
+    .config("hoodie.datasource.meta.sync.enable", "false")
+    .config("hoodie.insert.shuffle.parallelism", "4")
+    .config("hoodie.upsert.shuffle.parallelism", "4")
     .getOrCreate()
 
   private var tableId = 0

@@ -60,11 +60,10 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected final Schema inputSchemaWithMetaFields;
 
   /**
-   * The write schema for write record. It may be different
-   * from the inputSchema when the HoodieWriteConfig#WRITE_SCHEMA has specified.
+   * The table schema of the table which used to write/read records from the table.
    */
-  protected final Schema writerSchema;
-  protected final Schema writerSchemaWithMetafields;
+  protected final Schema tableSchema;
+  protected final Schema tableSchemaWithMetaFields;
 
   protected HoodieTimer timer;
   protected WriteStatus writeStatus;
@@ -87,8 +86,8 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
     this.fileId = fileId;
     this.inputSchema = specifySchema.orElseGet(() -> getInputSchema(config));
     this.inputSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(inputSchema);
-    this.writerSchema = specifySchema.orElseGet(() -> getWriteSchema(config));
-    this.writerSchemaWithMetafields = HoodieAvroUtils.addMetadataFields(writerSchema);
+    this.tableSchema = specifySchema.orElseGet(() -> hoodieTable.getTableSchema(config, false));
+    this.tableSchemaWithMetaFields = HoodieAvroUtils.addMetadataFields(tableSchema);
     this.timer = new HoodieTimer().startTimer();
     this.writeStatus = (WriteStatus) ReflectionUtils.loadClass(config.getWriteStatusClassName(),
         !hoodieTable.getIndex().isImplicitWithStorage(), config.getWriteStatusFailureFraction());
@@ -98,10 +97,6 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   private static Schema getInputSchema(HoodieWriteConfig config) {
     return new Schema.Parser().parse(config.getSchema());
-  }
-
-  private static Schema getWriteSchema(HoodieWriteConfig config) {
-    return new Schema.Parser().parse(config.getWriteSchema());
   }
 
   /**
@@ -136,7 +131,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   }
 
   public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+    return tableSchemaWithMetaFields;
   }
 
   /**
@@ -174,7 +169,7 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
    * Rewrite the GenericRecord with the Schema containing the Hoodie Metadata fields.
    */
   protected GenericRecord rewriteRecord(GenericRecord record) {
-    return HoodieAvroUtils.rewriteRecord(record, writerSchemaWithMetafields);
+    return HoodieAvroUtils.rewriteRecord(record, tableSchemaWithMetaFields);
   }
 
   public abstract List<WriteStatus> close();

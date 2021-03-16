@@ -21,6 +21,7 @@ import org.apache.hudi.exception.HoodieDuplicateKeyException
 import org.apache.spark.sql.Row
 
 class InsertTableTest extends HoodieBaseSqlTest {
+
   test("Test Insert Into") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -74,7 +75,7 @@ class InsertTableTest extends HoodieBaseSqlTest {
            |) using hudi
            | location '${tmp.getCanonicalPath}/$tableName'
            | options (
-           |  type = 'mor',
+           |  type = 'cow',
            |  primaryKey = 'id',
            |  versionColumn = 'ts'
            | )
@@ -104,6 +105,7 @@ class InsertTableTest extends HoodieBaseSqlTest {
       }
       // Create table with dropDup is true
       val tableName2 = generateTableName
+      spark.sql("set hoodie.datasource.write.insert.drop.duplicates = true")
       spark.sql(
         s"""
            |create table $tableName2 (
@@ -116,8 +118,7 @@ class InsertTableTest extends HoodieBaseSqlTest {
            | options (
            |  type = 'mor',
            |  primaryKey = 'id',
-           |  versionColumn = 'ts',
-           |  dropDup = true
+           |  versionColumn = 'ts'
            | )
        """.stripMargin)
       spark.sql(s"insert into $tableName2 select 1, 'a1', 10, 1000")

@@ -591,6 +591,7 @@ public class HoodieTableMetaClient implements Serializable {
 
     private HoodieTableType tableType;
     private String tableName;
+    private String tableSchema;
     private String archiveLogFolder;
     private String payloadClassName;
     private Integer timelineLayoutVersion;
@@ -614,6 +615,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setTableName(String tableName) {
       this.tableName = tableName;
+      return this;
+    }
+
+    public PropertyBuilder setTableSchema(String tableSchema) {
+      this.tableSchema = tableSchema;
       return this;
     }
 
@@ -696,6 +702,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD)) {
         setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
       }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_SCHEMA)) {
+        setTableSchema(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_SCHEMA));
+      }
       return this;
     }
 
@@ -710,6 +719,10 @@ public class HoodieTableMetaClient implements Serializable {
           String.valueOf(HoodieTableVersion.current().versionCode()));
       if (tableType == HoodieTableType.MERGE_ON_READ && payloadClassName != null) {
         properties.setProperty(HoodieTableConfig.HOODIE_PAYLOAD_CLASS_PROP_NAME, payloadClassName);
+      }
+
+      if (null != tableSchema) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_SCHEMA, tableSchema);
       }
 
       if (null != archiveLogFolder) {

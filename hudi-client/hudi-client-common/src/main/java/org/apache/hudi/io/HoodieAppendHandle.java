@@ -337,7 +337,7 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
   protected void appendDataAndDeleteBlocks(Map<HeaderMetadataType, String> header) {
     try {
       header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, instantTime);
-      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, writerSchemaWithMetafields.toString());
+      header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, tableSchemaWithMetaFields.toString());
       List<HoodieLogBlock> blocks = new ArrayList<>(2);
       if (recordList.size() > 0) {
         blocks.add(HoodieDataBlock.getBlock(hoodieTable.getLogDataBlockFormat(), recordList, header));

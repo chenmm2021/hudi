@@ -18,60 +18,14 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.common.table.HoodieTableConfig
+
 
 /**
   * The HoodieOptionConfig defines some short name for the hoodie
-  * option key and value to simplify the use cost.
+  * option key and value.
   */
 object HoodieOptionConfig {
-  /**
-    * The short name for the record row key.
-    */
-  val SQL_KEY_TABLE_PRIMARY_KEY = "primaryKey"
-
-  /**
-    * The short name for the table type.
-    */
-  val SQL_KEY_TABLE_TYPE = "type"
-
-  /**
-    * The short name for the pre-combine field.
-    */
-  val SQL_KEY_VERSION_COLUMN = "versionColumn"
-
-  /**
-    * The short name for the insert parallelism.
-    */
-  val SQL_KEY_INSERT_PARALLELISM = "insertParallelism"
-
-  /**
-    * The short name for the update parallelism.
-    */
-  val SQL_KEY_UPDATE_PARALLELISM = "updateParallelism"
-
-  /**
-    * The short name for the delete parallelism.
-    */
-  val SQL_KEY_DELETE_PARALLELISM = "deleteParallelism"
-
-  /**
-    * The short name for INSERT_DROP_DUPS_OPT_KEY.
-    */
-  val SQL_KEY_DROP_INSERT_DUPLCATE_KEY = "dropDup"
-
-  /**
-    * The mapping of the sql short name key to the hoodie's config key.
-    */
-  private val keyMapping: Map[String, String] = Map (
-    SQL_KEY_TABLE_PRIMARY_KEY -> DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY,
-    SQL_KEY_TABLE_TYPE -> DataSourceWriteOptions.TABLE_TYPE_OPT_KEY,
-    SQL_KEY_VERSION_COLUMN -> DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY,
-    SQL_KEY_INSERT_PARALLELISM -> HoodieWriteConfig.INSERT_PARALLELISM,
-    SQL_KEY_UPDATE_PARALLELISM -> HoodieWriteConfig.UPSERT_PARALLELISM,
-    SQL_KEY_DELETE_PARALLELISM -> HoodieWriteConfig.DELETE_PARALLELISM,
-    SQL_KEY_DROP_INSERT_DUPLCATE_KEY -> DataSourceWriteOptions.INSERT_DROP_DUPS_OPT_KEY
-  ).mapValues(withPrefix)
 
   /**
     * The short name for the value of COW_TABLE_TYPE_OPT_VAL.
@@ -82,6 +36,57 @@ object HoodieOptionConfig {
     * The short name for the value of MOR_TABLE_TYPE_OPT_VAL.
     */
   val SQL_VALUE_TABLE_TYPE_MOR = "mor"
+
+
+  val SQL_KEY_TABLE_PRIMARY_KEY: HoodieOption[String] = buildConf()
+    .withSqlKey("primaryKey")
+    .withHoodieKey(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
+    .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS)
+    .build()
+
+  val SQL_KEY_TABLE_TYPE: HoodieOption[String] = buildConf()
+    .withSqlKey("type")
+    .withHoodieKey(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY)
+    .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_TYPE_PROP_NAME)
+    .defaultValue(SQL_VALUE_TABLE_TYPE_COW)
+    .build()
+
+  val SQL_KEY_VERSION_COLUMN: HoodieOption[String] = buildConf()
+    .withSqlKey("versionColumn")
+    .withHoodieKey(DataSourceWriteOptions.PRECOMBINE_FIELD_OPT_KEY)
+    .withTableConfigKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD)
+    .build()
+
+  val SQL_PAYLOAD_CLASS: HoodieOption[String] = buildConf()
+    .withSqlKey("payloadClass")
+    .withHoodieKey(DataSourceWriteOptions.PAYLOAD_CLASS_OPT_KEY)
+    .defaultValue(DataSourceWriteOptions.DEFAULT_PAYLOAD_OPT_VAL)
+    .build()
+
+  /**
+    * The mapping of the sql short name key to the hoodie's config key.
+    */
+  private lazy val keyMapping: Map[String, String] = {
+    HoodieOptionConfig.getClass.getDeclaredFields
+        .filter(f => f.getType == classOf[HoodieOption[_]])
+        .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})
+        .map(option => option.sqlKeyName -> option.hoodieKeyName)
+        .toMap
+  }
+
+  /**
+    * The mapping of the sql short name key to the hoodie table config key
+    * defined in HoodieTableConfig.
+    */
+  private lazy val keyTableConfigMapping: Map[String, String] = {
+    HoodieOptionConfig.getClass.getDeclaredFields
+      .filter(f => f.getType == classOf[HoodieOption[_]])
+      .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})
+      .filter(_.tableConfigKey.isDefined)
+      .map(option => option.sqlKeyName -> option.tableConfigKey.get)
+      .toMap
+  }
+
 
   private val valueMapping: Map[String, String] = Map (
     SQL_VALUE_TABLE_TYPE_COW -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
@@ -99,13 +104,35 @@ object HoodieOptionConfig {
   }
 
   /**
+    * Mapping the sql options to the hoodie table config which used to store to the hoodie
+    * .properites when create the table.
+    * @param options
+    * @return
+    */
+  def mappingSqlOptionToTableConfig(options: Map[String, String]): Map[String, String] = {
+    defaultTableConfig ++
+      options.filter(kv => keyTableConfigMapping.contains(kv._1))
+        .map(kv => keyTableConfigMapping(kv._1) -> valueMapping.getOrElse(kv._2, kv._2))
+  }
+
+  private def defaultTableConfig: Map[String, String] = {
+    HoodieOptionConfig.getClass.getDeclaredFields
+      .filter(f => f.getType == classOf[HoodieOption[_]])
+      .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})
+      .filter(option => option.tableConfigKey.isDefined && option.defaultValue.isDefined)
+      .map(option => option.tableConfigKey.get ->
+        valueMapping.getOrElse(option.defaultValue.get.toString, option.defaultValue.get.toString))
+      .toMap
+  }
+
+  /**
     * Get the primary key from the table options.
     * @param options
     * @return
     */
   def getPrimaryColumns(options: Map[String, String]): Array[String] = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.get(withPrefix(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY))
+    params.get(DataSourceWriteOptions.RECORDKEY_FIELD_OPT_KEY)
       .map(_.split(",").filter(_.length > 0))
       .getOrElse(Array.empty)
   }
@@ -117,24 +144,46 @@ object HoodieOptionConfig {
     */
   def getTableType(options: Map[String, String]): String = {
     val params = mappingSqlOptionToHoodieParam(options)
-    params.getOrElse(withPrefix(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY),
+    params.getOrElse(DataSourceWriteOptions.TABLE_TYPE_OPT_KEY,
       DataSourceWriteOptions.DEFAULT_TABLE_TYPE_OPT_VAL)
   }
 
-  /**
-    * Prefix for the spark config for hoodie key.
-    * For example "spark.hoodie.datasource.hive_sync.enable" in spark config is
-    * mapping to the hoodie config key "hoodie.datasource.hive_sync.enable".
-    */
-  val CONFIG_PREFIX = "spark."
+  def buildConf[T](): HoodieOptions[T] = {
+    new HoodieOptions[T]
+  }
+}
 
-  def withPrefix(key: String): String = s"$CONFIG_PREFIX$key"
+case class HoodieOption[T](sqlKeyName: String, hoodieKeyName: String,
+                           defaultValue: Option[T], tableConfigKey: Option[String] = None)
 
-  def tripPrefix(keyWithPrefix: String): String = {
-    if (keyWithPrefix.startsWith(CONFIG_PREFIX)) {
-      keyWithPrefix.substring(CONFIG_PREFIX.length)
-    } else {
-      keyWithPrefix
-    }
+class HoodieOptions[T] {
+
+  private var sqlKeyName: String = _
+  private var hoodieKeyName: String =_
+  private var tableConfigKey: String =_
+  private var defaultValue: T =_
+
+  def withSqlKey(sqlKeyName: String): HoodieOptions[T] = {
+    this.sqlKeyName = sqlKeyName
+    this
+  }
+
+  def withHoodieKey(hoodieKeyName: String): HoodieOptions[T] = {
+    this.hoodieKeyName = hoodieKeyName
+    this
+  }
+
+  def withTableConfigKey(tableConfigKey: String): HoodieOptions[T] = {
+    this.tableConfigKey = tableConfigKey
+    this
+  }
+
+  def defaultValue(defaultValue: T): HoodieOptions[T] = {
+    this.defaultValue = defaultValue
+    this
+  }
+
+  def build(): HoodieOption[T] = {
+    HoodieOption(sqlKeyName, hoodieKeyName, Option(defaultValue), Option(tableConfigKey))
   }
 }
