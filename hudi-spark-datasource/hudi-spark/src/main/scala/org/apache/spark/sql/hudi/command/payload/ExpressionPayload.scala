@@ -28,7 +28,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
 import org.apache.hudi.common.util.{ValidationUtils, Option => HOption}
-import org.apache.hudi.io.HoodieMergeHandle
+import org.apache.hudi.io.HoodieWriteHandle
 import org.apache.hudi.sql.IExpressionEvaluator
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.plans.logical.Assignment
@@ -41,6 +41,9 @@ import scala.collection.mutable.ArrayBuffer
   * A HoodieRecordPayload for MergeIntoHoodieTableCommand.
   * It will execute the condition and assignments expression in the
   * match and not-match actions and compute the final record to write.
+  *
+  * If there is no condition match the record, ExpressionPayload will return
+  * a HoodieWriteHandle.IGNORE_RECORD, and the write handles will ignore this record.
   * @param record
   * @param orderingVal
   */
@@ -48,6 +51,9 @@ class ExpressionPayload(record: GenericRecord,
                         orderingVal: Comparable[_])
   extends DefaultHoodieRecordPayload(record, orderingVal) {
 
+  def this(recordOpt: HOption[GenericRecord]) {
+    this(recordOpt.orElse(null), 0)
+  }
   /**
     * The schema of this table.
     */
@@ -110,7 +116,7 @@ class ExpressionPayload(record: GenericRecord,
     if (resultRecordOpt == null) {
       // If there is no condition matched, just filter this record.
       // here we return a IGNORE_RECORD, HoodieMergeHandle will not handle it.
-      HOption.of(HoodieMergeHandle.IGNORE_RECORD)
+      HOption.of(HoodieWriteHandle.IGNORE_RECORD)
     } else {
       resultRecordOpt
     }
@@ -144,7 +150,7 @@ class ExpressionPayload(record: GenericRecord,
       } else {
         // If there is no condition matched, just filter this record.
         // Here we return a IGNORE_RECORD, HoodieCreateHandle will not handle it.
-        HOption.of(HoodieMergeHandle.IGNORE_RECORD)
+        HOption.of(HoodieWriteHandle.IGNORE_RECORD)
       }
     }
   }

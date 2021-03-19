@@ -87,11 +87,18 @@ object HoodieOptionConfig {
       .toMap
   }
 
+  private lazy val tableConfigKeyToSqlKey: Map[String, String] =
+    keyTableConfigMapping.map(f => f._2 -> f._1)
 
+  /**
+    * Mapping of the short sql value to the hoodie's config value
+    */
   private val valueMapping: Map[String, String] = Map (
     SQL_VALUE_TABLE_TYPE_COW -> DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL,
     SQL_VALUE_TABLE_TYPE_MOR -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
   )
+
+  private lazy val reverseValueMapping = valueMapping.map(f => f._2 -> f._1)
 
   /**
     * Mapping the sql's short name key/value in the options to the hoodie's config key/value.
@@ -111,11 +118,21 @@ object HoodieOptionConfig {
     */
   def mappingSqlOptionToTableConfig(options: Map[String, String]): Map[String, String] = {
     defaultTableConfig ++
-      options.filter(kv => keyTableConfigMapping.contains(kv._1))
+      options.filterKeys(k => keyTableConfigMapping.contains(k))
         .map(kv => keyTableConfigMapping(kv._1) -> valueMapping.getOrElse(kv._2, kv._2))
   }
 
-  private def defaultTableConfig: Map[String, String] = {
+  /**
+    * Mapping the table config (loaded from the hoodie.properties) to the sql options.
+    * @param options
+    * @return
+    */
+  def mappingTableConfigToSqlOption(options: Map[String, String]): Map[String, String] = {
+    options.filterKeys(k => tableConfigKeyToSqlKey.contains(k))
+      .map(kv => tableConfigKeyToSqlKey(kv._1) -> reverseValueMapping.getOrElse(kv._2, kv._2))
+  }
+
+  private lazy val defaultTableConfig: Map[String, String] = {
     HoodieOptionConfig.getClass.getDeclaredFields
       .filter(f => f.getType == classOf[HoodieOption[_]])
       .map(f => {f.setAccessible(true); f.get(HoodieOptionConfig).asInstanceOf[HoodieOption[_]]})

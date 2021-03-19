@@ -274,6 +274,11 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
+      <artifactId>spark-hive_2.11</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>

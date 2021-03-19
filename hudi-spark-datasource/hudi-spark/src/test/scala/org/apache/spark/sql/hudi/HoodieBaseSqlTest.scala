@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import java.io.File
 
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.util.Utils
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
@@ -64,5 +64,9 @@ class HoodieBaseSqlTest extends FunSuite with BeforeAndAfterAll {
 
   override protected def afterAll(): Unit = {
     spark.stop()
+  }
+
+  protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
+    assertResult(expects.map(row => Row(row: _*)).toArray)(spark.sql(sql).collect())
   }
 }

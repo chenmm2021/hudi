@@ -54,6 +54,12 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
 
   private static final Logger LOG = LogManager.getLogger(HoodieWriteHandle.class);
   /**
+   * A special record returned by HoodieRecordPayload which will should be skip by the write
+   * handler.
+   */
+  public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
+
+  /**
    * The input schema of the incoming dataframe.
    */
   protected final Schema inputSchema;
@@ -204,5 +210,37 @@ public abstract class HoodieWriteHandle<T extends HoodieRecordPayload, I, K, O> 
   protected HoodieFileWriter createNewFileWriter(String instantTime, Path path, HoodieTable<T, I, K, O> hoodieTable,
       HoodieWriteConfig config, Schema schema, TaskContextSupplier taskContextSupplier) throws IOException {
     return HoodieFileWriterFactory.getFileWriter(instantTime, path, hoodieTable, config, schema, taskContextSupplier);
+  }
+
+  /**
+   * A special record returned by {@link HoodieRecordPayload}, which means
+   * {@link HoodieWriteHandle} should just skip this record.
+   */
+  private static class IgnoreRecord implements GenericRecord {
+
+    @Override
+    public void put(int i, Object v) {
+
+    }
+
+    @Override
+    public Object get(int i) {
+      return null;
+    }
+
+    @Override
+    public Schema getSchema() {
+      return null;
+    }
+
+    @Override
+    public void put(String key, Object v) {
+
+    }
+
+    @Override
+    public Object get(String key) {
+      return null;
+    }
   }
 }

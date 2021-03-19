@@ -14,6 +14,7 @@
  * This file is an adaptation of Presto's presto-parser/src/main/antlr4/com/facebook/presto/sql/parser/SqlBase.g4 grammar.
  */
 
+// The parser file is forked from spark's SqlBase.g4.
 grammar SqlBase;
 
 @members {

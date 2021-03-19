@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.analysis
 
 import scala.collection.JavaConverters._
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -140,44 +140,53 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
 
       // Append the meta field to the insert query to walk through the validate for the
       // number of insert fields with the number of the target table fields.
-      case InsertIntoTable(table : LogicalPlan, partition, query: Project,
+      case InsertIntoTable(table : LogicalPlan, partition, query,
         overwrite, ifPartitionNotExists)
         if isHoodieTable(table, sparkSession) &&
           !containUnResolvedStar(query) && !checkAlreadyAppendMetaField(query) =>
-        val project = removeMetaField(query)
 
-        val withMetaFieldProjects =
-          HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
-            Alias(Literal.create(null, StringType), _)()).toArray[NamedExpression] ++
-            project.projectList
-        // Append the meta fileds to the insert query.
-        val newQuery = Project(withMetaFieldProjects, project.child)
+        val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
+          Alias(Literal.create(null, StringType), _)()).toArray[NamedExpression]
+        val newQuery = query match {
+          case project: Project =>
+            val withMetaFieldProjects =
+              metaFields ++ project.projectList
+            // Append the meta fields to the insert query.
+            Project(withMetaFieldProjects, project.child)
+          case _ =>
+            val withMetaFieldProjects = metaFields ++ query.output
+            Project(withMetaFieldProjects, query)
+        }
         InsertIntoTable(table, partition, newQuery, overwrite, ifPartitionNotExists)
       case _ => plan
     }
   }
 
-  private def containUnResolvedStar(project: Project): Boolean = {
-    project.projectList.exists(_.isInstanceOf[UnresolvedStar])
+  private def containUnResolvedStar(query: LogicalPlan): Boolean = {
+    query match {
+      case project: Project => project.projectList.exists(_.isInstanceOf[UnresolvedStar])
+      case _ => false
+    }
   }
 
   /**
-    * Check if the the project has already append the meta fields to avoid duplicate append.
-    * @param project
+    * Check if the the query of insert statement has already append the meta fields to avoid
+    * duplicate append.
+    * @param query
     * @return
     */
-  private def checkAlreadyAppendMetaField(project: Project): Boolean = {
-    project.projectList.filter(isMetaField)
-      .map {
-        case Alias(_, name) => name.toLowerCase
-        case AttributeReference(name, _, _, _) => name.toLowerCase
-        case other => throw new IllegalArgumentException(s"$other should not be a hoodie meta field")
-      }.toSet == HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
-  }
-
-  private def removeMetaField(project: Project): Project = {
-    val filteredProjects = project.projectList.filterNot(isMetaField)
-    Project(filteredProjects, project.child)
+  private def checkAlreadyAppendMetaField(query: LogicalPlan): Boolean = {
+    query match {
+      case project: Project =>
+        project.projectList.take(HoodieRecord.HOODIE_META_COLUMNS.size())
+          .filter(isMetaField)
+          .map {
+            case Alias(_, name) => name.toLowerCase
+            case AttributeReference(name, _, _, _) => name.toLowerCase
+            case other => throw new IllegalArgumentException(s"$other should not be a hoodie meta field")
+          }.toSet == HoodieRecord.HOODIE_META_COLUMNS.asScala.toSet
+      case _=> false
+    }
   }
 
   private def isMetaField(exp: Expression): Boolean = {
@@ -212,6 +221,13 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     // Resolve the fake project
     val resolvedProject =
       analyzer.ResolveReferences.apply(fakeProject).asInstanceOf[Project]
+    val unResolvedAttrs = resolvedProject.projectList.head.collect {
+      case attr: UnresolvedAttribute => attr
+    }
+    if (unResolvedAttrs.nonEmpty) {
+      throw new AnalysisException(s"Cannot resolve ${unResolvedAttrs.mkString(",")} in " +
+        s"${expression.sql}, the input " + s"columns is: [${fakeProject.child.output.mkString(", ")}]")
+    }
     // Fetch the resolved expression from the fake project.
     resolvedProject.projectList.head.asInstanceOf[Alias].child
   }

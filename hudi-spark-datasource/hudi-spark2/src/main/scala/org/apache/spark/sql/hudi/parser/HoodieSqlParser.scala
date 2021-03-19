@@ -36,7 +36,7 @@ class HoodieSqlParser(session: SparkSession, delegate: ParserInterface)
   extends ParserInterface with Logging {
 
   private lazy val conf = session.sqlContext.conf
-  private lazy val builder = new HoodieSqlAstBuilder(conf)
+  private lazy val builder = new HoodieSqlAstBuilder(conf, delegate)
 
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
     builder.visit(parser.singleStatement()) match {

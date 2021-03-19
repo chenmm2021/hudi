@@ -192,6 +192,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
       Option<IndexedRecord> avroRecord = hoodieRecord.getData().getInsertValue(inputSchema,
           config.getProps());
       if (avroRecord.isPresent()) {
+        if (avroRecord.get() == HoodieMergeHandle.IGNORE_RECORD) {
+          return avroRecord;
+        }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema
         avroRecord = Option.of(rewriteRecord((GenericRecord) avroRecord.get()));
         String seqId =
@@ -445,7 +448,9 @@ public class HoodieAppendHandle<T extends HoodieRecordPayload, I, K, O> extends 
     }
     Option<IndexedRecord> indexedRecord = getIndexedRecord(record);
     if (indexedRecord.isPresent()) {
-      recordList.add(indexedRecord.get());
+      if (indexedRecord.get() != IGNORE_RECORD) { // Skip the Ignore Record.
+        recordList.add(indexedRecord.get());
+      }
     } else {
       keysToDelete.add(record.getKey());
     }

@@ -23,8 +23,7 @@ import org.apache.avro.Schema
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.HoodiePayloadProps
 import org.apache.hudi.common.model.HoodiePayloadProps._
-import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM, INSERT_PARALLELISM, TABLE_NAME, UPSERT_PARALLELISM}
-import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.keygen.ComplexKeyGenerator
 import org.apache.hudi.{AvroConversionUtils, HoodieSparkSqlWriter, HoodieWriterUtils}
@@ -44,10 +43,17 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
   * The match on condition must contain the row key fields currently, so that we can use Hoodie
   * Index to speed up the performance.
   *
+  * The main algorithm:
+  *
   * We pushed down all the matched and not matched (condition, assignment) expression pairs to the
   * ExpressionPayload. And the matched (condition, assignment) expression pairs will execute in the
   * ExpressionPayload#combineAndGetUpdateValue to compute the result record, while the not matched
   * expression pairs will execute in the ExpressionPayload#getInsertValue.
+  *
+  * For Mor table, it is a litter complex than this. The matched record also goes through the getInsertValue
+  * and write append to the log. So the update actions & insert actions should process by the same
+  * way. We pushed all the update actions & insert actions together to the
+  * ExpressionPayload#getInsertValue.
   *
   * @param mergeInto
   */
@@ -92,6 +98,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
   private lazy val targetTable =
     sparkSession.sessionState.catalog.getTableMetadata(targetTableIdentify)
 
+  private lazy val targetTableType =
+    HoodieOptionConfig.getTableType(targetTable.storage.properties)
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
     // Create the default parameters
@@ -123,10 +132,18 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
 
     val deleteActions = mergeInto.matchedActions.filter(_.isInstanceOf[DeleteAction])
       .map(_.asInstanceOf[DeleteAction])
-    assert(deleteActions.size <= 1, "Should be only on delete action in the merge into statement.")
+    assert(deleteActions.size <= 1, "Should be only one delete action in the merge into statement.")
     val deleteAction = deleteActions.headOption
 
-    val insertActions = mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
+    val insertActions = if (targetTableType == MOR_TABLE_TYPE_OPT_VAL) {
+      // For Mor table, the update record goes through the HoodieRecordPayload#getInsertValue
+      // We append the update actions to the insert actions, so that we can execute the update
+      // actions in the ExpressionPayload#getInsertValue.
+      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction]) ++
+        updateActions.map(update => InsertAction(update.condition, update.assignments))
+    } else {
+      mergeInto.notMatchedActions.map(_.asInstanceOf[InsertAction])
+    }
     // Check for the insert actions
     checkInsertAssignments(insertActions)
 
@@ -148,6 +165,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     // Serialize the Map[UpdateCondition, UpdateAssignments] to base64 string
     val serializedUpdateConditionAndExpressions = Base64.getEncoder
       .encodeToString(SerDeUtils.toBytes(updateConditionToAssignments))
+    writeParams += (PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
+      serializedUpdateConditionAndExpressions)
 
     if (deleteAction.isDefined) {
       val deleteCondition = deleteAction.get.condition
@@ -159,8 +178,6 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       writeParams += (PAYLOAD_DELETE_CONDITION -> serializedDeleteCondition)
     }
 
-    writeParams += (PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS ->
-      serializedUpdateConditionAndExpressions)
     // Serialize the Map[InsertCondition, InsertAssignments] to base64 string
     writeParams += (PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
       serializedInsertConditionAndExpressions(insertActions, sourceDf))
@@ -289,14 +306,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     }
   }
 
-  private def checkInsertExpression(expressions: Seq[Expression], inputDf: DataFrame): Unit = {
+  /**
+    * Check the insert action expression.
+    * The insert expression should not contain target table field.
+    */
+  private def checkInsertExpression(expressions: Seq[Expression], sourceDf: DataFrame): Unit = {
     expressions.foreach(exp => {
       val references = exp.collect {
         case reference: BoundReference => reference
       }
       references.foreach(ref => {
-        if (ref.ordinal >= inputDf.schema.fields.length) {
-          throw new IllegalArgumentException(s"Insert clause cannot contain target table field")
+        if (ref.ordinal >= sourceDf.schema.size) {
+          val targetColumn = targetTableSchemaWithoutMetaFields(ref.ordinal - sourceDf.schema.size)
+          throw new IllegalArgumentException(s"Insert clause cannot contain target table field: $targetColumn" +
+            s" in ${exp.sql}")
         }
       })
     })
@@ -339,10 +362,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
           HIVE_TABLE_OPT_KEY -> targetTableName,
           HIVE_PARTITION_FIELDS_OPT_KEY -> targetTable.partitionColumnNames.mkString(","),
           HIVE_PARTITION_EXTRACTOR_CLASS_OPT_KEY -> classOf[MultiPartKeysValueExtractor].getCanonicalName,
-          URL_ENCODE_PARTITIONING_OPT_KEY -> "true", // enable the url decode for sql.
-          INSERT_PARALLELISM -> "64", // set the default parallelism to 64
-          UPSERT_PARALLELISM -> "64",
-          DELETE_PARALLELISM -> "64"
+          URL_ENCODE_PARTITIONING_OPT_KEY -> "true" // enable the url decode for sql.
         )
       })
   }

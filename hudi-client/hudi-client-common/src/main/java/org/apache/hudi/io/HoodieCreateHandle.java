@@ -112,7 +112,7 @@ public class HoodieCreateHandle<T extends HoodieRecordPayload, I, K, O> extends 
     Option recordMetadata = record.getData().getMetadata();
     try {
       if (avroRecord.isPresent()) {
-        if (avroRecord.get() == HoodieMergeHandle.IGNORE_RECORD) {
+        if (avroRecord.get() == IGNORE_RECORD) {
           return;
         }
         // Convert GenericRecord to GenericRecord with hoodie commit metadata in schema

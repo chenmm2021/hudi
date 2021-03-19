@@ -90,8 +90,6 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   private static final Logger LOG = LogManager.getLogger(HoodieMergeHandle.class);
 
-  public static IgnoreRecord IGNORE_RECORD = new IgnoreRecord();
-
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected Set<String> writtenRecordKeys;
   protected HoodieFileWriter<IndexedRecord> fileWriter;
@@ -404,37 +402,5 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   public HoodieBaseFile baseFileForMerge() {
     return baseFileToMerge;
-  }
-
-  /**
-   * A special record returned by {@link HoodieRecordPayload}, which means
-   * {@link HoodieMergeHandle} should just skip this record.
-   */
-  private static class IgnoreRecord implements GenericRecord {
-
-    @Override
-    public void put(int i, Object v) {
-
-    }
-
-    @Override
-    public Object get(int i) {
-      return null;
-    }
-
-    @Override
-    public Schema getSchema() {
-      return null;
-    }
-
-    @Override
-    public void put(String key, Object v) {
-
-    }
-
-    @Override
-    public Object get(String key) {
-      return null;
-    }
   }
 }

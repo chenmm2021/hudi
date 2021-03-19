@@ -592,6 +592,7 @@ public class HoodieTableMetaClient implements Serializable {
     private HoodieTableType tableType;
     private String tableName;
     private String tableSchema;
+    private String rowKeyFields;
     private String archiveLogFolder;
     private String payloadClassName;
     private Integer timelineLayoutVersion;
@@ -620,6 +621,11 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setTableSchema(String tableSchema) {
       this.tableSchema = tableSchema;
+      return this;
+    }
+
+    public PropertyBuilder setRowKeyFields(String rowKeyFields) {
+      this.rowKeyFields = rowKeyFields;
       return this;
     }
 
@@ -702,6 +708,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD)) {
         setPreCombineField(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD));
       }
+      if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS)) {
+        setRowKeyFields(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS));
+      }
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_SCHEMA)) {
         setTableSchema(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_SCHEMA));
       }
@@ -750,6 +759,9 @@ public class HoodieTableMetaClient implements Serializable {
 
       if (null != preCombineField) {
         properties.put(HoodieTableConfig.HOODIE_TABLE_PRECOMBINE_FIELD, preCombineField);
+      }
+      if (null != rowKeyFields) {
+        properties.put(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS, rowKeyFields);
       }
       return properties;
     }
