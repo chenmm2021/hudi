@@ -25,12 +25,12 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, InsertAction, InsertIntoTable, Join, LogicalPlan, MergeIntoTable, Project, UpdateAction}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, DeleteTable, InsertAction, InsertIntoTable, Join, LogicalPlan, MergeIntoTable, Project, UpdateAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.CreateDataSourceTableCommand
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
-import org.apache.spark.sql.hudi.command.{CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand}
+import org.apache.spark.sql.hudi.command.{CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, UpdateHoodieTableCommand}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StringType
 
@@ -60,16 +60,26 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
         if m.resolved && isHoodieTable(target, sparkSession) =>
           MergeIntoHoodieTableCommand(m)
 
+      // Convert to UpdateHoodieTableCommand
+      case u @ UpdateTable(table, _, _)
+        if u.resolved && isHoodieTable(table, sparkSession) =>
+          UpdateHoodieTableCommand(u)
+
+      // Convert to DeleteHoodieTableCommand
+      case d @ DeleteTable(table, _)
+        if d.resolved && isHoodieTable(table, sparkSession) =>
+          DeleteHoodieTableCommand(d)
+
       // Convert to InsertIntoHoodieTableCommand
       case _ @ InsertIntoTable(
         l @ LogicalRelation(_: BaseRelation, _, table, _), parts, query, overwrite, _)
         if table.isDefined && isHoodieTable(table.get) =>
-        new InsertIntoHoodieTableCommand(l, query, parts, overwrite)
+          new InsertIntoHoodieTableCommand(l, query, parts, overwrite)
 
       // Convert to CreateHoodieTableAsSelectCommand
       case CreateTable(table, mode, Some(query))
         if query.resolved && isHoodieTable(table) =>
-        CreateHoodieTableAsSelectCommand(table, mode, query)
+          CreateHoodieTableAsSelectCommand(table, mode, query)
       case _=> plan
     }
   }
@@ -137,6 +147,28 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
         // Return the resolved MergeIntoTable
         MergeIntoTable(target, source, resolvedMergeCondition,
           resolvedMatchedActions, resolvedNotMatchedActions)
+
+      // Resolve update table
+      case UpdateTable(table, condition, assignments)
+        if isHoodieTable(table, sparkSession) && table.resolved =>
+        // Resolve condition
+        val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
+        // Resolve assignments
+        val resolvedAssignments = assignments.map(assignment => {
+          val resolvedKey = resolveExpressionFrom(table)(assignment.key)
+          val resolvedValue = resolveExpressionFrom(table)(assignment.value)
+          Assignment(resolvedKey, resolvedValue)
+        })
+        // Return the resolved UpdateTable
+        UpdateTable(table, resolvedCondition, resolvedAssignments)
+
+      // Resolve Delete Table
+      case DeleteTable(table, condition)
+        if isHoodieTable(table, sparkSession) && table.resolved =>
+        // Resolve condition
+        val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
+        // Return the resolved DeleteTable
+        DeleteTable(table, resolvedCondition)
 
       // Append the meta field to the insert query to walk through the validate for the
       // number of insert fields with the number of the target table fields.

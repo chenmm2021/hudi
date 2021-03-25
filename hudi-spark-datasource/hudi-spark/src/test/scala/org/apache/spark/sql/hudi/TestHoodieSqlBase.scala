@@ -24,7 +24,7 @@ import org.apache.spark.util.Utils
 import org.scalactic.source
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
-class HoodieBaseSqlTest extends FunSuite with BeforeAndAfterAll {
+class TestHoodieSqlBase extends FunSuite with BeforeAndAfterAll {
 
   protected lazy val spark = SparkSession.builder()
     .master("local[1]")
@@ -34,6 +34,7 @@ class HoodieBaseSqlTest extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.datasource.meta.sync.enable", "false")
     .config("hoodie.insert.shuffle.parallelism", "4")
     .config("hoodie.upsert.shuffle.parallelism", "4")
+    .config("hoodie.delete.shuffle.parallelism", "4")
     .getOrCreate()
 
   private var tableId = 0

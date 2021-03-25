@@ -24,6 +24,8 @@ singleStatement
 
 statement
     : mergeInto                                                        #mergeIntoTable
+    | updateTableStmt                                                  #updateTable
+    | deleteTableStmt                                                  #deleteTable
     | .*?                                                              #passThrough
     ;
 
@@ -87,6 +89,15 @@ assignment
 qualifiedNameList
     : qualifiedName (',' qualifiedName)*
     ;
+
+updateTableStmt
+  : UPDATE tableIdentifier SET assignmentList (WHERE where=booleanExpression)?
+  ;
+
+deleteTableStmt
+  : DELETE FROM tableIdentifier (WHERE where=booleanExpression)?
+  ;
+
 
 PRIMARY: 'PRIMARY';
 KEY: 'KEY';

@@ -141,6 +141,21 @@ class HoodieSqlAstBuilder(conf: SQLConf, delegate: ParserInterface) extends Hood
       }
     }
 
+  override def visitUpdateTable(ctx: UpdateTableContext): LogicalPlan = withOrigin(ctx) {
+    val updateStmt = ctx.updateTableStmt()
+    val table = UnresolvedRelation(visitTableIdentifier(updateStmt.tableIdentifier()))
+    val condition = if (updateStmt.where != null) Some(expression(updateStmt.where)) else None
+    val assignments = withAssignments(updateStmt.assignmentList())
+    UpdateTable(table, condition, assignments)
+  }
+
+  override def visitDeleteTable (ctx: DeleteTableContext): LogicalPlan = withOrigin(ctx) {
+    val deleteStmt = ctx.deleteTableStmt()
+    val table = UnresolvedRelation(visitTableIdentifier(deleteStmt.tableIdentifier()))
+    val condition = if (deleteStmt.where != null) Some(expression(deleteStmt.where)) else None
+    DeleteTable(table, condition)
+  }
+
   /**
     * Convert the tree to string.
     */

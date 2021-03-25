@@ -24,7 +24,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType
 import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType, StructField}
 
-class CreateTableTest extends HoodieBaseSqlTest {
+class TestCreateTable extends TestHoodieSqlBase {
 
   test("Test Create Managed Hoodie Table") {
     val tableName = generateTableName

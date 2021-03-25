@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 
-class MergeIntoTest extends HoodieBaseSqlTest {
+class TestMergeInto extends TestHoodieSqlBase {
 
   test("Test MergeInto Basic") {
     withTempDir { tmp =>

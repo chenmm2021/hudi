@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.exception.HoodieDuplicateKeyException
 
-class InsertTableTest extends HoodieBaseSqlTest {
+class TestInsertTable extends TestHoodieSqlBase {
 
   test("Test Insert Into") {
     withTempDir { tmp =>
