@@ -112,6 +112,7 @@
     <spark3.version>3.0.0</spark3.version>
     <spark2bundle.version></spark2bundle.version>
     <spark3bundle.version>3</spark3bundle.version>
+    <hudi.spark.moudle>hudi-spark2</hudi.spark.moudle>
     <avro.version>1.8.2</avro.version>
     <scala11.version>2.11.12</scala11.version>
     <scala12.version>2.12.10</scala12.version>
@@ -535,7 +536,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-hive_2.11</artifactId>
+        <artifactId>spark-hive_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>provided</scope>
       </dependency>
@@ -1474,6 +1475,7 @@
         <sparkbundle.version>${spark3bundle.version}</sparkbundle.version>
         <scala.version>${scala12.version}</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
+        <hudi.spark.moudle>hudi-spark3</hudi.spark.moudle>
         <kafka.version>2.4.1</kafka.version>
         <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
         <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>

@@ -29,6 +29,8 @@
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <scala.binary.version>2.11</scala.binary.version>
+    <scala.version>${scala11.version}</scala.version>
   </properties>
 
   <build>

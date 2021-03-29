@@ -19,10 +19,8 @@ package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.expressions.Expression
 // This code is just copy from v2Commands.scala in spark 3.0
-case class UpdateTable(
+case class DeleteFromTable(
    table: LogicalPlan,
-   assignments: Seq[Assignment],
-   condition: Option[Expression]
-   ) extends Command {
+   condition: Option[Expression]) extends Command {
   override def children: Seq[LogicalPlan] = Seq(table)
 }

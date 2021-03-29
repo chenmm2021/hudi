@@ -23,6 +23,7 @@ import java.util.Locale
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.SparkSqlAdapterSupport
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -36,7 +37,7 @@ import org.apache.spark.sql.types.{DataType, NullType, StringType, StructField, 
 
 import scala.collection.immutable.Map
 
-object HoodieSqlUtils {
+object HoodieSqlUtils extends SparkSqlAdapterSupport {
 
   def isHoodieTable(table: CatalogTable): Boolean = {
     table.provider.map(_.toLowerCase(Locale.ROOT)).orNull == "hudi"
@@ -50,7 +51,8 @@ object HoodieSqlUtils {
   def isHoodieTable(table: LogicalPlan, spark: SparkSession): Boolean = {
     tripAlias(table) match {
       case LogicalRelation(_, _, Some(tbl), _) => isHoodieTable(tbl)
-      case UnresolvedRelation(tableId) => isHoodieTable(tableId, spark)
+      case relation: UnresolvedRelation =>
+        isHoodieTable(sparkSqlAdapter.toTableIdentify(relation), spark)
       case _=> false
     }
   }

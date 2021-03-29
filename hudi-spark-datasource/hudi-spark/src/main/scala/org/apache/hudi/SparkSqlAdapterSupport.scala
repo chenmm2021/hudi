@@ -15,12 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.catalyst.plans.logical
+package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.SPARK_VERSION
+import org.apache.spark.sql.hudi.SparkSqlAdapter
 
-case class DeleteTable(
-   table: LogicalPlan,
-   condition: Option[Expression]) extends Command {
-  override def children: Seq[LogicalPlan] = Seq(table)
+trait SparkSqlAdapterSupport {
+
+  lazy val sparkSqlAdapter: SparkSqlAdapter = {
+    val adapterClass = if (SPARK_VERSION.startsWith("2.")) {
+      "org.apache.spark.sql.adapter.Spark2SqlAdapter"
+    } else {
+      "org.apache.spark.sql.adapter.Spark3SqlAdapter"
+    }
+    getClass.getClassLoader.loadClass(adapterClass)
+      .newInstance().asInstanceOf[SparkSqlAdapter]
+  }
 }

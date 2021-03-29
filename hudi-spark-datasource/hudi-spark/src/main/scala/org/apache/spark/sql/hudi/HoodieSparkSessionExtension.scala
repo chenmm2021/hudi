@@ -17,19 +17,20 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.spark.SPARK_VERSION
+import org.apache.hudi.SparkSqlAdapterSupport
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis
-import org.apache.spark.sql.hudi.parser.HoodieSqlParser
 
 /**
   * The Hoodie SparkSessionExtension for extending the syntax and add the rules.
   */
-class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit) {
+class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
+  with SparkSqlAdapterSupport{
   override def apply(extensions: SparkSessionExtensions): Unit = {
-    if (SPARK_VERSION.startsWith("2.")) {
+    // For spark2, we add a extended sql parser
+    if (sparkSqlAdapter.createExtendedSparkParser.isDefined) {
       extensions.injectParser { (session, parser) =>
-        new HoodieSqlParser(session, parser)
+        sparkSqlAdapter.createExtendedSparkParser.get(session, parser)
       }
     }
 

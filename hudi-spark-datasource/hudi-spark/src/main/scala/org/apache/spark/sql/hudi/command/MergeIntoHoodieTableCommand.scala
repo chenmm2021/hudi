@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodiePayloadProps._
 import org.apache.hudi.config.HoodieWriteConfig.TABLE_NAME
 import org.apache.hudi.hive.MultiPartKeysValueExtractor
 import org.apache.hudi.keygen.ComplexKeyGenerator
-import org.apache.hudi.{AvroConversionUtils, HoodieSparkSqlWriter, HoodieWriterUtils}
+import org.apache.hudi.{AvroConversionUtils, HoodieSparkSqlWriter, HoodieWriterUtils, SparkSqlAdapterSupport}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, BoundReference, Cast, EqualTo, Expression, Literal}
@@ -57,7 +57,8 @@ import org.apache.spark.sql.hudi.command.payload.ExpressionPayload
   *
   * @param mergeInto
   */
-case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends RunnableCommand {
+case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends RunnableCommand
+  with SparkSqlAdapterSupport {
 
   private var sparkSession: SparkSession = _
 
@@ -65,7 +66,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     * The alias name of the source.
     */
   private lazy val sourceAlias: String = mergeInto.sourceTable match {
-    case SubqueryAlias(name, _) => name.unquotedString
+    case SubqueryAlias(name, _) => sparkSqlAdapter.toTableIdentify(name).unquotedString
     case plan => throw new IllegalArgumentException(s"Illegal plan $plan in source")
   }
 
@@ -73,7 +74,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
     * The alias name of the target.
     */
   private lazy val targetAlias: String = mergeInto.targetTable match {
-    case SubqueryAlias(name, _) => name.unquotedString
+    case SubqueryAlias(name, _) =>
+      sparkSqlAdapter.toTableIdentify(name).unquotedString
     case plan => throw new IllegalArgumentException(s"Illegal plan $plan in target")
   }
 
@@ -86,7 +88,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Runnab
       case SubqueryAlias(tableId, _) => tableId
       case plan => throw new IllegalArgumentException(s"Illegal plan $plan in target")
     }
-    TableIdentifier(aliaId.identifier, aliaId.database)
+    sparkSqlAdapter.toTableIdentify(aliaId)
   }
 
   /**

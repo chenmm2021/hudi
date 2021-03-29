@@ -34,7 +34,7 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import scala.collection.JavaConverters._
 
 
-object HoodieSparkUtils {
+object HoodieSparkUtils extends SparkSqlAdapterSupport {
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -99,7 +99,7 @@ object HoodieSparkUtils {
     // Use the Avro schema to derive the StructType which has the correct nullability information
     val dataType = SchemaConverters.toSqlType(avroSchema).dataType.asInstanceOf[StructType]
     val encoder = RowEncoder.apply(dataType).resolveAndBind()
-    val deserializer = HoodieSparkUtils.createRowSerDe(encoder)
+    val deserializer = sparkSqlAdapter.createSparkRowSerDe(encoder)
     df.queryExecution.toRdd.map(row => deserializer.deserializeRow(row))
       .mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
@@ -110,12 +110,4 @@ object HoodieSparkUtils {
       }
   }
 
-  def createRowSerDe(encoder: ExpressionEncoder[Row]): SparkRowSerDe = {
-    // TODO remove Spark2RowSerDe if Spark 2.x support is dropped
-    if (SPARK_VERSION.startsWith("2.")) {
-      new Spark2RowSerDe(encoder)
-    } else {
-      new Spark3RowSerDe(encoder)
-    }
-  }
 }

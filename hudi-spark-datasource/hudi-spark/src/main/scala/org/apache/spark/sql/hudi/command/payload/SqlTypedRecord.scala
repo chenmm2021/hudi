@@ -80,7 +80,7 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.
       // For backward compatibility, we still keep this conversion.
       case (LONG, DateType) =>
-        java.lang.Integer.valueOf((value.asInstanceOf[Long] / DateTimeUtils.MILLIS_PER_DAY).toInt)
+        java.lang.Integer.valueOf((value.asInstanceOf[Long] / SqlTypedRecord.MILLIS_PER_DAY).toInt)
 
       case (FLOAT, FloatType) => value.asInstanceOf[Float].asInstanceOf[java.lang.Float]
 
@@ -170,4 +170,8 @@ class SqlTypedRecord(val record: IndexedRecord) extends IndexedRecord {
   }
 
   override def getSchema: Schema = record.getSchema
+}
+
+object SqlTypedRecord {
+  val MILLIS_PER_DAY = 24 * 60 * 60 * 1000L
 }

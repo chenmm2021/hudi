@@ -22,7 +22,7 @@ import java.util.{Locale, Properties}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.hudi.DataSourceWriteOptions
+import org.apache.hudi.{DataSourceWriteOptions, SparkSqlAdapterSupport}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.hadoop.HoodieParquetInputFormat
@@ -53,7 +53,7 @@ import scala.collection.mutable
   * @param ignoreIfExists
   */
 case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean)
-  extends RunnableCommand {
+  extends RunnableCommand with SparkSqlAdapterSupport {
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     assert(table.tableType != CatalogTableType.VIEW)
@@ -100,8 +100,8 @@ case class CreateHoodieTableCommand(table: CatalogTable, ignoreIfExists: Boolean
       assert(table.schema.nonEmpty, s"Missing schema for Create Table: $tableName")
       // SPARK-19724: the default location of a managed table should be non-existent or empty.
       if (table.tableType == CatalogTableType.MANAGED &&
-        !sparkSession.sqlContext.conf.allowCreatingManagedTableUsingNonemptyLocation &&
-        isTableExists) {
+        !sparkSqlAdapter.allowCreatingManagedTableUsingNonemptyLocation(sparkSession.sqlContext.conf)
+        && isTableExists) {
         throw new AnalysisException(s"Can not create the managed table('$tableName')" +
             s". The associated location('$path') already exists.")
       }

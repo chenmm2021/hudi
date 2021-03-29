@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.SparkSqlAdapterSupport
+
 import scala.collection.JavaConverters._
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.spark.sql.{AnalysisException, SparkSession}
@@ -25,13 +27,12 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.Inner
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, DeleteTable, InsertAction, InsertIntoTable, Join, LogicalPlan, MergeIntoTable, Project, UpdateAction, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteAction, DeleteFromTable, InsertAction, LogicalPlan, MergeIntoTable, Project, UpdateAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.CreateDataSourceTableCommand
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlUtils._
 import org.apache.spark.sql.hudi.command.{CreateHoodieTableAsSelectCommand, CreateHoodieTableCommand, DeleteHoodieTableCommand, InsertIntoHoodieTableCommand, MergeIntoHoodieTableCommand, UpdateHoodieTableCommand}
-import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StringType
 
 object HoodieAnalysis {
@@ -51,7 +52,8 @@ object HoodieAnalysis {
   * Rule for convert the logical plan to command.
   * @param sparkSession
   */
-case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan]
+  with SparkSqlAdapterSupport {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan match {
@@ -66,16 +68,19 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
           UpdateHoodieTableCommand(u)
 
       // Convert to DeleteHoodieTableCommand
-      case d @ DeleteTable(table, _)
+      case d @ DeleteFromTable(table, _)
         if d.resolved && isHoodieTable(table, sparkSession) =>
           DeleteHoodieTableCommand(d)
 
       // Convert to InsertIntoHoodieTableCommand
-      case _ @ InsertIntoTable(
-        l @ LogicalRelation(_: BaseRelation, _, table, _), parts, query, overwrite, _)
-        if table.isDefined && isHoodieTable(table.get) =>
-          new InsertIntoHoodieTableCommand(l, query, parts, overwrite)
-
+      case l if sparkSqlAdapter.isInsertInto(l) =>
+        val (table, partition, query, overwrite, _) = sparkSqlAdapter.getInsertIntoChildren(l).get
+        table match {
+          case relation: LogicalRelation if isHoodieTable(relation, sparkSession) =>
+            new InsertIntoHoodieTableCommand(relation, query, partition, overwrite)
+          case _ =>
+            l
+        }
       // Convert to CreateHoodieTableAsSelectCommand
       case CreateTable(table, mode, Some(query))
         if query.resolved && isHoodieTable(table) =>
@@ -89,7 +94,8 @@ case class HoodieAnalysis(sparkSession: SparkSession) extends Rule[LogicalPlan] 
   * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
   * @param sparkSession
   */
-case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[LogicalPlan]
+  with SparkSqlAdapterSupport {
   private lazy val analyzer = sparkSession.sessionState.analyzer
 
   def apply(plan: LogicalPlan): LogicalPlan = {
@@ -149,7 +155,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           resolvedMatchedActions, resolvedNotMatchedActions)
 
       // Resolve update table
-      case UpdateTable(table, condition, assignments)
+      case UpdateTable(table, assignments, condition)
         if isHoodieTable(table, sparkSession) && table.resolved =>
         // Resolve condition
         val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
@@ -160,36 +166,41 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
           Assignment(resolvedKey, resolvedValue)
         })
         // Return the resolved UpdateTable
-        UpdateTable(table, resolvedCondition, resolvedAssignments)
+        UpdateTable(table, resolvedAssignments, resolvedCondition)
 
       // Resolve Delete Table
-      case DeleteTable(table, condition)
+      case DeleteFromTable(table, condition)
         if isHoodieTable(table, sparkSession) && table.resolved =>
         // Resolve condition
         val resolvedCondition = condition.map(resolveExpressionFrom(table)(_))
         // Return the resolved DeleteTable
-        DeleteTable(table, resolvedCondition)
+        DeleteFromTable(table, resolvedCondition)
 
       // Append the meta field to the insert query to walk through the validate for the
       // number of insert fields with the number of the target table fields.
-      case InsertIntoTable(table : LogicalPlan, partition, query,
-        overwrite, ifPartitionNotExists)
-        if isHoodieTable(table, sparkSession) &&
-          !containUnResolvedStar(query) && !checkAlreadyAppendMetaField(query) =>
+      case l if sparkSqlAdapter.isInsertInto(l) =>
+        val (table, partition, query, overwrite, ifPartitionNotExists) =
+          sparkSqlAdapter.getInsertIntoChildren(l).get
 
-        val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
-          Alias(Literal.create(null, StringType), _)()).toArray[NamedExpression]
-        val newQuery = query match {
-          case project: Project =>
-            val withMetaFieldProjects =
-              metaFields ++ project.projectList
-            // Append the meta fields to the insert query.
-            Project(withMetaFieldProjects, project.child)
-          case _ =>
-            val withMetaFieldProjects = metaFields ++ query.output
-            Project(withMetaFieldProjects, query)
+        if (isHoodieTable(table, sparkSession) && !containUnResolvedStar(query) &&
+          !checkAlreadyAppendMetaField(query)) {
+          val metaFields = HoodieRecord.HOODIE_META_COLUMNS.asScala.map(
+            Alias(Literal.create(null, StringType), _)()).toArray[NamedExpression]
+          val newQuery = query match {
+            case project: Project =>
+              val withMetaFieldProjects =
+                metaFields ++ project.projectList
+              // Append the meta fields to the insert query.
+              Project(withMetaFieldProjects, project.child)
+            case _ =>
+              val withMetaFieldProjects = metaFields ++ query.output
+              Project(withMetaFieldProjects, query)
+          }
+          sparkSqlAdapter.createInsertInto(table, partition, newQuery, overwrite, ifPartitionNotExists)
+        } else {
+          l
         }
-        InsertIntoTable(table, partition, newQuery, overwrite, ifPartitionNotExists)
+
       case _ => plan
     }
   }
@@ -245,7 +256,7 @@ case class HoodieResolveReferences(sparkSession: SparkSession) extends Rule[Logi
     // Fake a project for the expression based on the source plan.
     val fakeProject = if (right.isDefined) {
       Project(Seq(Alias(expression, "_c0")()),
-        Join(left, right.get, Inner, None))
+        sparkSqlAdapter.createJoin(left, right.get, Inner))
     } else {
       Project(Seq(Alias(expression, "_c0")()),
         left)
