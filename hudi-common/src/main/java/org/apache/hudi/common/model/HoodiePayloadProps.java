@@ -40,4 +40,14 @@ public class HoodiePayloadProps {
    */
   public static final String PAYLOAD_EVENT_TIME_FIELD_PROP = "hoodie.payload.event.time.field";
   public static String DEFAULT_PAYLOAD_EVENT_TIME_FIELD_VAL = "ts";
+
+  public static final String PAYLOAD_DELETE_CONDITION = "hoodie.payload.delete.condition";
+
+  public static final String PAYLOAD_UPDATE_CONDITION_AND_ASSIGNMENTS =
+      "hoodie.payload.update.condition.assignments";
+
+  public static final String PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS =
+      "hoodie.payload.insert.condition.assignments";
+
+  public static final String PAYLOAD_TABLE_SCHEMA = "hoodie.payload.table.schema";
 }

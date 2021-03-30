@@ -671,4 +671,27 @@ public abstract class HoodieTable<T extends HoodieRecordPayload, I, K, O> implem
     // to engine context, and it ends up being null (as its not serializable and marked transient here).
     return context == null ? new HoodieLocalEngineContext(hadoopConfiguration.get()) : context;
   }
+
+  /**
+   * Get the table schema from the table. If it hasn't already been committed,
+   * use the input data schema in the config as the table schema.
+   * @return
+   */
+  public Schema getTableSchema(HoodieWriteConfig config, boolean withMetaField) {
+    Schema tableSchema;
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(getMetaClient());
+    try {
+      //  first try to load schema from table file or meta file
+      tableSchema = schemaUtil.getTableAvroSchemaWithoutMetadataFields();
+    } catch (Exception e) {
+      LOG.info("cannot to get schema from the table file, use the input schema in config");
+      // if cannot load from table, use the input data schema in config
+      tableSchema = new Schema.Parser().parse(config.getSchema());
+    }
+    if (withMetaField) {
+      return HoodieAvroUtils.addMetadataFields(tableSchema);
+    } else {
+      return tableSchema;
+    }
+  }
 }

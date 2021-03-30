@@ -17,18 +17,20 @@
   <parent>
     <artifactId>hudi-spark-datasource</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>0.8.0-SNAPSHOT</version>
+    <version>0.9.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
   <artifactId>hudi-spark2_${scala.binary.version}</artifactId>
-  <version>0.8.0-SNAPSHOT</version>
+  <version>0.9.0-SNAPSHOT</version>
 
   <name>hudi-spark2_${scala.binary.version}</name>
   <packaging>jar</packaging>
 
   <properties>
     <main.basedir>${project.parent.parent.basedir}</main.basedir>
+    <scala.binary.version>2.11</scala.binary.version>
+    <scala.version>${scala11.version}</scala.version>
   </properties>
 
   <build>
@@ -143,6 +145,24 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.antlr</groupId>
+        <artifactId>antlr4-maven-plugin</artifactId>
+        <version>4.7</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>antlr4</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <visitor>true</visitor>
+          <listener>true</listener>
+          <sourceDirectory>../hudi-spark2/src/main/antlr4/</sourceDirectory>
+          <libDirectory>../hudi-spark2/src/main/antlr4/imports</libDirectory>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -151,7 +171,7 @@
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
-      <version>${scala11.version}</version>
+      <version>${scala.version}</version>
     </dependency>
 
     <!-- Hoodie -->

@@ -125,11 +125,11 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
 
   @Override
   public Schema getWriterSchemaWithMetafields() {
-    return writerSchemaWithMetafields;
+    return tableSchemaWithMetaFields;
   }
 
   public Schema getWriterSchema() {
-    return writerSchema;
+    return tableSchema;
   }
 
   /**
@@ -174,7 +174,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       createMarkerFile(partitionPath, newFileName);
 
       // Create the writer for writing the new version file
-      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, writerSchemaWithMetafields, taskContextSupplier);
+      fileWriter = createNewFileWriter(instantTime, newFilePath, hoodieTable, config, tableSchemaWithMetaFields, taskContextSupplier);
     } catch (IOException io) {
       LOG.error("Error in update task at commit " + instantTime, io);
       writeStatus.setGlobalError(io);
@@ -192,7 +192,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config.getProps());
       LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
       this.keyToNewRecords = new ExternalSpillableMap<>(memoryForMerge, config.getSpillableMapBasePath(),
-              new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(writerSchema));
+          new DefaultSizeEstimator(), new HoodieRecordSizeEstimator(inputSchema));
     } catch (IOException io) {
       throw new HoodieIOException("Cannot instantiate an ExternalSpillableMap", io);
     }
@@ -278,8 +278,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       HoodieRecord<T> hoodieRecord = new HoodieRecord<>(keyToNewRecords.get(key));
       try {
         Option<IndexedRecord> combinedAvroRecord =
-            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord, useWriterSchema ? writerSchemaWithMetafields : writerSchema,
+            hoodieRecord.getData().combineAndGetUpdateValue(oldRecord,
+              useWriterSchema ? inputSchemaWithMetaFields : inputSchema,
                 config.getPayloadConfig().getProps());
+
+        // just skip the IGNORE_RECORD
+        if (combinedAvroRecord.isPresent() && combinedAvroRecord.get() == IGNORE_RECORD) {
+          return;
+        }
         if (writeUpdateRecord(hoodieRecord, combinedAvroRecord)) {
           /*
            * ONLY WHEN 1) we have an update for this key AND 2) We are able to successfully write the the combined new
@@ -302,7 +308,7 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
         fileWriter.writeAvro(key, oldRecord);
       } catch (IOException | RuntimeException e) {
         String errMsg = String.format("Failed to merge old record into new file for key %s from old file %s to new file %s with writerSchema %s",
-                key, getOldFilePath(), newFilePath, writerSchemaWithMetafields.toString(true));
+                key, getOldFilePath(), newFilePath, tableSchemaWithMetaFields.toString(true));
         LOG.debug("Old record is " + oldRecord);
         throw new HoodieUpsertException(errMsg, e);
       }
@@ -319,11 +325,14 @@ public class HoodieMergeHandle<T extends HoodieRecordPayload, I, K, O> extends H
       while (newRecordsItr.hasNext()) {
         HoodieRecord<T> hoodieRecord = newRecordsItr.next();
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
-          if (useWriterSchema) {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchemaWithMetafields));
-          } else {
-            writeRecord(hoodieRecord, hoodieRecord.getData().getInsertValue(writerSchema));
+          Schema schema = useWriterSchema ? inputSchemaWithMetaFields : inputSchema;
+          Option<IndexedRecord> insertRecord =
+              hoodieRecord.getData().getInsertValue(schema, config.getProps());
+          // just skip the ignore record
+          if (insertRecord.isPresent() && insertRecord.get() == IGNORE_RECORD) {
+            continue;
           }
+          writeRecord(hoodieRecord, insertRecord);
           insertRecordsWritten++;
         }
       }
