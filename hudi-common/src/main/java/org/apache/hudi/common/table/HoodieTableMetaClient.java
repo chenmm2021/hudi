@@ -716,7 +716,7 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS)) {
         setPartitionColumns(
-          properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS));
+            properties.getProperty(HoodieTableConfig.HOODIE_TABLE_PARTITION_COLUMNS));
       }
       if (properties.containsKey(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS)) {
         setRowKeyFields(properties.getProperty(HoodieTableConfig.HOODIE_TABLE_ROWKEY_FIELDS));

@@ -71,7 +71,7 @@ case class HoodieFileIndex(
      schemaSpec: Option[StructType],
      options: Map[String, String],
      @transient fileStatusCache: FileStatusCache = NoopCache)
-  extends FileIndex with Logging {
+  extends FileIndex with Logging with SparkSqlAdapterSupport {
 
   private val basePath = metaClient.getBasePath
 
@@ -247,8 +247,8 @@ case class HoodieFileIndex(
       .get(DateTimeUtils.TIMEZONE_OPTION)
       .getOrElse(SQLConf.get.sessionLocalTimeZone)
 
-    val sparkParsePartitionUtil = HoodieSparkUtils.createSparkParsePartitionUtil(spark
-      .sessionState.conf)
+    val sparkParsePartitionUtil = sparkSqlAdapter.createSparkParsePartitionUtil(
+      spark.sessionState.conf)
     // Convert partition path to PartitionRowPath
     val partitionRowPaths = partitionPaths.map { partitionPath =>
       val partitionRow = if (partitionSchema.fields.length == 0) {

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{Spark2RowSerDe, Spark3RowSerDe}
+import org.apache.hudi.Spark3RowSerDe
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
@@ -26,6 +26,7 @@ import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, Join, JoinHint, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+import org.apache.spark.sql.execution.datasources.{Spark3ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkSqlAdapter
 import org.apache.spark.sql.internal.SQLConf
 
@@ -74,5 +75,9 @@ class Spark3SqlAdapter extends SparkSqlAdapter {
   override def createInsertInto(table: LogicalPlan, partition: Map[String, Option[String]],
      query: LogicalPlan, overwrite: Boolean, ifPartitionNotExists: Boolean): LogicalPlan = {
     InsertIntoStatement(table, partition, query, overwrite, ifPartitionNotExists)
+  }
+
+  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = {
+    new Spark3ParsePartitionUtil(conf)
   }
 }

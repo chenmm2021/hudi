@@ -25,6 +25,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.plans.logical.{Join, LogicalPlan}
+import org.apache.spark.sql.execution.datasources.SparkParsePartitionUtil
 import org.apache.spark.sql.internal.SQLConf
 
 /**
@@ -53,4 +54,5 @@ trait SparkSqlAdapter {
 
   def createExtendedSparkParser: Option[(SparkSession, ParserInterface) => ParserInterface] = None
 
+  def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil
 }

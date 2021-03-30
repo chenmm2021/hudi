@@ -26,6 +26,7 @@ import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.JoinType
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, Join, LogicalPlan}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.execution.datasources.{Spark2ParsePartitionUtil, SparkParsePartitionUtil}
 import org.apache.spark.sql.hudi.SparkSqlAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSqlParser
 import org.apache.spark.sql.internal.SQLConf
@@ -79,4 +80,5 @@ class Spark2SqlAdapter extends SparkSqlAdapter {
     )
   }
 
+  override def createSparkParsePartitionUtil(conf: SQLConf): SparkParsePartitionUtil = new Spark2ParsePartitionUtil
 }
